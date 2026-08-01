@@ -1,22 +1,26 @@
 """
-SQLAlchemy models for the tables that the Booking Service's availability
-logic depends on. These mirror the Supabase schema exactly (see the
-Milestone 2 migrations) -- column names, types, and nullability must
-stay in sync with the live database.
-
-Only the tables needed for check_availability are modeled here.
-Customer/appointment-write models live in a separate module once
-create_appointment is built.
+SQLAlchemy models for the tables the Booking Service depends on. These
+mirror the Supabase schema exactly (see the Milestone 2 migrations) --
+column names, types, and nullability must stay in sync with the live
+database.
 """
 
 import uuid
 from datetime import date, datetime, time
 
-from sqlalchemy import ForeignKey, String, Boolean, Integer, Numeric, Date, Time
+from sqlalchemy import ForeignKey, String, Boolean, Integer, Numeric, Date, Time, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, TIMESTAMP
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+
+
+class Chain(Base):
+    __tablename__ = "chains"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    name: Mapped[str] = mapped_column(String)
+    vertical: Mapped[str] = mapped_column(String)
 
 
 class Branch(Base):
@@ -25,6 +29,8 @@ class Branch(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     chain_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("chains.id"))
     name: Mapped[str] = mapped_column(String)
+    address: Mapped[str | None] = mapped_column(String)
+    phone: Mapped[str | None] = mapped_column(String)
     timezone: Mapped[str] = mapped_column(String)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
 
@@ -44,6 +50,16 @@ class BranchHours(Base):
     is_closed: Mapped[bool] = mapped_column(Boolean, default=False)
 
     branch: Mapped["Branch"] = relationship(back_populates="hours")
+
+
+class BranchSettings(Base):
+    __tablename__ = "branch_settings"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    branch_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("branches.id"))
+    cancellation_policy: Mapped[str | None] = mapped_column(String)
+    deposit_policy: Mapped[str | None] = mapped_column(String)
+    booking_buffer_minutes: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class Staff(Base):
@@ -114,6 +130,29 @@ class StaffService(Base):
     service_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("services.id"))
 
 
+class Product(Base):
+    __tablename__ = "products"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    branch_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("branches.id"))
+    name: Mapped[str] = mapped_column(String)
+    category: Mapped[str | None] = mapped_column(String)
+    price_min: Mapped[float] = mapped_column(Numeric(10, 2))
+    price_max: Mapped[float | None] = mapped_column(Numeric(10, 2))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class Customer(Base):
+    __tablename__ = "customers"
+    __table_args__ = (UniqueConstraint("chain_id", "phone", name="customers_chain_id_phone_key"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    chain_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("chains.id"))
+    phone: Mapped[str] = mapped_column(String)
+    name: Mapped[str | None] = mapped_column(String)
+    email: Mapped[str | None] = mapped_column(String)
+
+
 class Appointment(Base):
     __tablename__ = "appointments"
 
@@ -124,3 +163,24 @@ class Appointment(Base):
     start_time: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True))
     end_time: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True))
     status: Mapped[str] = mapped_column(String, default="booked")
+    source: Mapped[str] = mapped_column(String, default="voice")
+
+
+class CustomerService(Base):
+    """One row per service actually rendered on a visit -- doubles as
+    the appointment<->service join and the queryable per-customer,
+    per-branch, per-chain service history (see the schema design
+    conversation: chain_id/branch_id are intentionally denormalized)."""
+
+    __tablename__ = "customer_services"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    customer_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("customers.id"))
+    chain_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("chains.id"))
+    branch_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("branches.id"))
+    appointment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("appointments.id"))
+    service_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("services.id"))
+    staff_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("staff.id"))
+    price_at_booking: Mapped[float] = mapped_column(Numeric(10, 2))
+    performed_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True))
+
