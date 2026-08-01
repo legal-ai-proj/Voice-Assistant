@@ -4,7 +4,8 @@ This must stay in sync with the tool's JSON schema registered in Vapi
 (see the "check_availability" tool config discussed in the prompt doc).
 """
 
-from datetime import date, time
+from datetime import date as date_type
+from datetime import time as time_type
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -13,7 +14,7 @@ from pydantic import BaseModel, Field
 class CheckAvailabilityRequest(BaseModel):
     branch_id: UUID
     service_id: UUID
-    date: date = Field(
+    date: date_type = Field(
         ...,
         description="Resolved calendar date (YYYY-MM-DD). Vapi must "
         "resolve any relative date the caller gives -- 'next Monday', "
@@ -29,11 +30,11 @@ class CheckAvailabilityRequest(BaseModel):
 class AvailableSlot(BaseModel):
     staff_id: UUID
     staff_name: str
-    start_time: time
+    start_time: time_type
 
 
 class CheckAvailabilityResponse(BaseModel):
-    date: date
+    date: date_type
     service_name: str
     duration_minutes: int
     slots: list[AvailableSlot]
@@ -44,3 +45,4 @@ class CheckAvailabilityResponse(BaseModel):
         "'Nothing's open that day, closest is Tuesday.' The agent "
         "should prefer this field over re-deriving language from `slots`.",
     )
+
