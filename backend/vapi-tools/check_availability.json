@@ -1,0 +1,35 @@
+{
+  "type": "function",
+  "function": {
+    "name": "check_availability",
+    "description": "Check open appointment slots for a service on a specific date, optionally for a specific barber. Always resolve any relative date the caller gives (e.g. 'next Monday') to an exact YYYY-MM-DD date using {{current_date}} before calling this.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "branch_id": {
+          "type": "string",
+          "description": "The branch this call belongs to -- injected per-tenant, not something the model decides."
+        },
+        "service_id": {
+          "type": "string",
+          "description": "The service the caller wants."
+        },
+        "date": {
+          "type": "string",
+          "description": "Exact calendar date, YYYY-MM-DD. Must already be resolved from any relative phrase."
+        },
+        "staff_id": {
+          "type": "string",
+          "description": "Optional. Omit entirely if the caller has no barber preference."
+        }
+      },
+      "required": ["branch_id", "service_id", "date"]
+    }
+  },
+  "server": {
+    "url": "https://<your-railway-app>.up.railway.app/api/v1/voice-tools/check-availability",
+    "headers": {
+      "x-vapi-secret": "<VAPI_SHARED_SECRET -- same value as the backend's env var, set in Vapi dashboard, never commit this>"
+    }
+  }
+}
