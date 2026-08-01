@@ -4,9 +4,15 @@ the assistant's config (check_availability first; create_appointment,
 reschedule_appointment, etc. follow the same pattern). These are the
 ONLY way the voice agent ever touches booking data -- Vapi never
 queries Supabase directly, per the platform's core architecture rule.
+
+branch_id is a URL path parameter, not part of the request body the
+model fills in. Each branch's Vapi assistant has its tool config
+pointed at a URL with its own branch_id already baked in, so the model
+never sees, generates, or can get this value wrong.
 """
 
 import logging
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,15 +35,16 @@ router = APIRouter(
 )
 
 
-@router.post("/check-availability", response_model=CheckAvailabilityResponse)
+@router.post("/check-availability/{branch_id}", response_model=CheckAvailabilityResponse)
 async def check_availability_endpoint(
+    branch_id: UUID,
     payload: CheckAvailabilityRequest,
     db: AsyncSession = Depends(get_db),
 ) -> CheckAvailabilityResponse:
     try:
         return await check_availability(
             db=db,
-            branch_id=payload.branch_id,
+            branch_id=branch_id,
             service_id=payload.service_id,
             target_date=payload.date,
             staff_id=payload.staff_id,
@@ -47,13 +54,19 @@ async def check_availability_endpoint(
         # and by extension the model reading this response). Log the
         # real detail server-side, return a clean message the voice
         # agent can safely relay or fall back on.
-        logger.warning("check_availability: unknown service", extra={"payload": payload.model_dump(mode="json")})
+        logger.warning(
+            "check_availability: unknown service",
+            extra={"branch_id": str(branch_id), "payload": payload.model_dump(mode="json")},
+        )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="That service isn't recognized for this branch.",
         )
     except NoEligibleStaffError:
-        logger.info("check_availability: no eligible staff", extra={"payload": payload.model_dump(mode="json")})
+        logger.info(
+            "check_availability: no eligible staff",
+            extra={"branch_id": str(branch_id), "payload": payload.model_dump(mode="json")},
+        )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No staff available for that service right now.",
@@ -64,3 +77,4 @@ async def check_availability_endpoint(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Something went wrong checking availability. Please try again shortly.",
         )
+

@@ -2,6 +2,12 @@
 Request/response contract for the check_availability voice tool.
 This must stay in sync with the tool's JSON schema registered in Vapi
 (see the "check_availability" tool config discussed in the prompt doc).
+
+Deliberately does NOT include branch_id: that comes from the URL path
+(baked into each branch's assistant's tool config at registration time),
+never from the model. The model should never be the thing deciding
+which tenant's data a query touches -- same reasoning as why business
+name/hours are injected rather than reasoned about.
 """
 
 from datetime import date as date_type
@@ -12,7 +18,6 @@ from pydantic import BaseModel, Field
 
 
 class CheckAvailabilityRequest(BaseModel):
-    branch_id: UUID
     service_id: UUID
     date: date_type = Field(
         ...,
@@ -45,4 +50,5 @@ class CheckAvailabilityResponse(BaseModel):
         "'Nothing's open that day, closest is Tuesday.' The agent "
         "should prefer this field over re-deriving language from `slots`.",
     )
+
 
