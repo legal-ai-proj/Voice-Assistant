@@ -6,7 +6,7 @@ Cancel is a soft status change ('cancelled'), never a hard delete, so
 the record survives for reporting and no-show tracking.
 """
 
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,7 +21,7 @@ from app.schemas.appointment_management import (
     RescheduleAppointmentResponse,
     TakeMessageResponse,
 )
-from app.services.booking_service import _get_working_window, _overlaps_any
+from app.services.booking_service import _get_working_window, _overlaps_any, combine_aware
 
 
 class BranchNotFoundError(Exception):
@@ -55,7 +55,7 @@ async def lookup_appointment(db: AsyncSession, branch_id: UUID, customer_phone: 
     _, chain = branch_and_chain
 
     customer, rows = await mgmt_repo.find_upcoming_appointments_by_phone(
-        db, branch_id, chain.id, customer_phone, datetime.now()
+        db, branch_id, chain.id, customer_phone, datetime.now(timezone.utc)
     )
 
     if customer is None or not rows:
@@ -102,7 +102,9 @@ async def reschedule_appointment(
         raise AppointmentNotFoundError(f"Could not resolve service for appointment {appointment_id}")
 
     day_of_week = (target_date.weekday() + 1) % 7
-    new_start = datetime.combine(target_date, start_time)
+    branch_and_chain = await info_repo.get_branch_with_chain(db, branch_id)
+    tz_name = branch_and_chain[0].timezone if branch_and_chain else "UTC"
+    new_start = combine_aware(target_date, start_time, tz_name)
     new_end = new_start + timedelta(minutes=service.duration_minutes)
 
     # The appointment keeps its assigned staff member; re-validate that

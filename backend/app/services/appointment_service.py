@@ -17,7 +17,7 @@ from app.repositories import appointment_repository as write_repo
 from app.repositories import availability_repository as avail_repo
 from app.repositories import business_info_repository as info_repo
 from app.schemas.appointments import CreateAppointmentResponse
-from app.services.booking_service import _get_working_window, _overlaps_any
+from app.services.booking_service import _get_working_window, _overlaps_any, combine_aware
 
 
 class ServiceNotFoundError(Exception):
@@ -61,7 +61,7 @@ async def create_appointment(
         raise SlotNoLongerAvailableError("No eligible staff for this service")
 
     day_of_week = (target_date.weekday() + 1) % 7
-    requested_start = datetime.combine(target_date, start_time)
+    requested_start = combine_aware(target_date, start_time, branch.timezone)
     requested_end = requested_start + timedelta(minutes=service.duration_minutes)
 
     chosen_staff = None

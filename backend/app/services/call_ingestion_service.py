@@ -9,7 +9,7 @@ ingestion log's processing_status with the outcome either way.
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,7 +31,7 @@ async def process_end_of_call(db: AsyncSession, branch_id: UUID, payload: dict) 
 
     ingestion = CallIngestionLog(
         id=uuid.uuid4(),
-        received_at=datetime.now(),
+        received_at=datetime.now(timezone.utc),
         vapi_call_id=vapi_call_id,
         branch_id=branch_id,
         raw_payload=payload,

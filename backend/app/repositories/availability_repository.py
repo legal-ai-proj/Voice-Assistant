@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tenant import (
     Appointment,
+    Branch,
     BranchHours,
     Service,
     Staff,
@@ -20,6 +21,11 @@ from app.models.tenant import (
     StaffService,
     StaffTimeOff,
 )
+
+
+async def get_branch(db: AsyncSession, branch_id: UUID) -> Branch | None:
+    result = await db.execute(select(Branch).where(Branch.id == branch_id))
+    return result.scalar_one_or_none()
 
 
 async def get_service(db: AsyncSession, service_id: UUID, branch_id: UUID) -> Service | None:
