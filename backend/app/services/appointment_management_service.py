@@ -8,6 +8,7 @@ the record survives for reporting and no-show tracking.
 
 from datetime import date, datetime, time, timedelta, timezone
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -59,7 +60,15 @@ async def lookup_appointment(db: AsyncSession, branch_id: UUID, customer_phone: 
     branch_and_chain = await info_repo.get_branch_with_chain(db, branch_id)
     if branch_and_chain is None:
         raise BranchNotFoundError(f"Branch {branch_id} not found or inactive")
-    _, chain = branch_and_chain
+    branch, chain = branch_and_chain
+
+    # Times are stored in UTC (timestamptz); convert to the branch's own
+    # timezone before showing them to the caller, so a booking made for
+    # 1 PM local reads back as "1 PM", not the stored UTC hour.
+    try:
+        branch_tz = ZoneInfo(branch.timezone)
+    except Exception:
+        branch_tz = ZoneInfo("UTC")
 
     customer, rows = await mgmt_repo.find_upcoming_appointments_by_phone(
         db, branch_id, chain.id, customer_phone, datetime.now(timezone.utc)
@@ -73,17 +82,20 @@ async def lookup_appointment(db: AsyncSession, branch_id: UUID, customer_phone: 
             message="I don't see any upcoming appointments under that number.",
         )
 
-    summaries = [
-        AppointmentSummary(
-            appointment_id=appt.id,
-            service_name=svc.name,
-            staff_name=staff.name if staff else None,
-            date=appt.start_time.date(),
-            start_time=appt.start_time.time(),
-            status=appt.status,
+    summaries = []
+    for appt, svc, staff in rows:
+        # appt.start_time is tz-aware UTC from Postgres; shift to local.
+        local_start = appt.start_time.astimezone(branch_tz)
+        summaries.append(
+            AppointmentSummary(
+                appointment_id=appt.id,
+                service_name=svc.name,
+                staff_name=staff.name if staff else None,
+                date=local_start.date(),
+                start_time=local_start.time(),
+                status=appt.status,
+            )
         )
-        for appt, svc, staff in rows
-    ]
 
     if len(summaries) == 1:
         s = summaries[0]
