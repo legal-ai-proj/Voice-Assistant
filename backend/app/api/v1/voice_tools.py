@@ -13,14 +13,25 @@ never sees, generates, or can get this value wrong.
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import verify_vapi_secret
+from app.schemas.appointment_management import (
+    CancelAppointmentRequest,
+    CancelAppointmentResponse,
+    LookupAppointmentRequest,
+    LookupAppointmentResponse,
+    RescheduleAppointmentRequest,
+    RescheduleAppointmentResponse,
+    TakeMessageRequest,
+    TakeMessageResponse,
+)
 from app.schemas.appointments import CreateAppointmentRequest, CreateAppointmentResponse
 from app.schemas.availability import CheckAvailabilityRequest, CheckAvailabilityResponse
 from app.schemas.business_info import BusinessInfoResponse
+from app.services import appointment_management_service as mgmt
 from app.services.appointment_service import (
     BranchNotFoundError as AppointmentBranchNotFoundError,
 )
@@ -37,6 +48,7 @@ from app.services.booking_service import (
     check_availability,
 )
 from app.services.business_info_service import BranchNotFoundError, get_business_info
+from app.services.call_ingestion_service import process_end_of_call
 
 logger = logging.getLogger(__name__)
 
@@ -164,3 +176,119 @@ async def create_appointment_endpoint(
         )
 
 
+@router.post("/lookup-appointment/{branch_id}", response_model=LookupAppointmentResponse)
+async def lookup_appointment_endpoint(
+    branch_id: UUID,
+    payload: LookupAppointmentRequest,
+    db: AsyncSession = Depends(get_db),
+) -> LookupAppointmentResponse:
+    """Find a caller's upcoming appointments by phone -- the dependency
+    reschedule/cancel both rely on to know WHICH appointment to touch."""
+    try:
+        return await mgmt.lookup_appointment(db, branch_id, payload.customer_phone)
+    except mgmt.BranchNotFoundError:
+        logger.warning("lookup_appointment: unknown branch", extra={"branch_id": str(branch_id)})
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="This branch isn't recognized.")
+    except Exception:
+        logger.exception("lookup_appointment: unexpected failure")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Something went wrong looking that up. Please try again shortly.",
+        )
+
+
+@router.post("/reschedule-appointment/{branch_id}", response_model=RescheduleAppointmentResponse)
+async def reschedule_appointment_endpoint(
+    branch_id: UUID,
+    payload: RescheduleAppointmentRequest,
+    db: AsyncSession = Depends(get_db),
+) -> RescheduleAppointmentResponse:
+    """Move an existing appointment. Re-validates the new slot server-side."""
+    try:
+        return await mgmt.reschedule_appointment(
+            db, branch_id, payload.appointment_id, payload.date, payload.start_time
+        )
+    except mgmt.AppointmentNotFoundError:
+        logger.info("reschedule: appointment not found", extra={"branch_id": str(branch_id)})
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="I couldn't find that appointment to reschedule.",
+        )
+    except mgmt.SlotNoLongerAvailableError:
+        logger.info("reschedule: new slot unavailable", extra={"branch_id": str(branch_id)})
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="That new time isn't available. Please check availability for another slot.",
+        )
+    except Exception:
+        logger.exception("reschedule_appointment: unexpected failure")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Something went wrong rescheduling. Please try again shortly.",
+        )
+
+
+@router.post("/cancel-appointment/{branch_id}", response_model=CancelAppointmentResponse)
+async def cancel_appointment_endpoint(
+    branch_id: UUID,
+    payload: CancelAppointmentRequest,
+    db: AsyncSession = Depends(get_db),
+) -> CancelAppointmentResponse:
+    """Soft-cancel an appointment (status -> 'cancelled', never deleted)."""
+    try:
+        return await mgmt.cancel_appointment(db, branch_id, payload.appointment_id)
+    except mgmt.AppointmentNotFoundError:
+        logger.info("cancel: appointment not found", extra={"branch_id": str(branch_id)})
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="I couldn't find that appointment to cancel.",
+        )
+    except mgmt.AlreadyCancelledError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="That appointment is already cancelled.",
+        )
+    except Exception:
+        logger.exception("cancel_appointment: unexpected failure")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Something went wrong cancelling. Please try again shortly.",
+        )
+
+
+@router.post("/take-message/{branch_id}", response_model=TakeMessageResponse)
+async def take_message_endpoint(
+    branch_id: UUID,
+    payload: TakeMessageRequest,
+    db: AsyncSession = Depends(get_db),
+) -> TakeMessageResponse:
+    """Save a message for staff follow-up."""
+    try:
+        return await mgmt.take_message(
+            db, branch_id, payload.caller_name, payload.caller_phone, payload.message_body
+        )
+    except mgmt.BranchNotFoundError:
+        logger.warning("take_message: unknown branch", extra={"branch_id": str(branch_id)})
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="This branch isn't recognized.")
+    except Exception:
+        logger.exception("take_message: unexpected failure")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Something went wrong saving that message. Please try again shortly.",
+        )
+
+
+@router.post("/webhook/end-of-call/{branch_id}")
+async def end_of_call_webhook(
+    branch_id: UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Vapi's end-of-call-report lands here after every call. Distinct
+    from the tools above: this is Vapi calling US, not the model calling
+    a tool mid-call. Logs the raw payload first (never loses a call),
+    then extracts and writes a clean call_logs row. Always returns 200
+    with a status body -- a 500 would just trigger Vapi retries."""
+    payload = await request.json()
+    result = await process_end_of_call(db, branch_id, payload)
+    return result

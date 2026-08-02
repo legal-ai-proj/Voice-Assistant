@@ -9,7 +9,7 @@ import uuid
 from datetime import date, datetime, time
 
 from sqlalchemy import ForeignKey, String, Boolean, Integer, Numeric, Date, Time, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID, TIMESTAMP
+from sqlalchemy.dialects.postgresql import UUID, TIMESTAMP, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -183,4 +183,60 @@ class CustomerService(Base):
     staff_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("staff.id"))
     price_at_booking: Mapped[float] = mapped_column(Numeric(10, 2))
     performed_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True))
+
+
+class Message(Base):
+    """A message left for staff follow-up (the take_message tool)."""
+
+    __tablename__ = "messages"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    branch_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("branches.id"))
+    caller_name: Mapped[str | None] = mapped_column(String)
+    caller_phone: Mapped[str | None] = mapped_column(String)
+    message_body: Mapped[str] = mapped_column(String)
+    status: Mapped[str] = mapped_column(String, default="new")
+
+
+class CallLog(Base):
+    """Structured record of a completed call (transcript, summary,
+    outcome). Written by the end-of-call webhook handler."""
+
+    __tablename__ = "call_logs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    branch_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("branches.id"))
+    customer_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("customers.id"))
+    appointment_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("appointments.id"))
+    transcript: Mapped[str | None] = mapped_column(String)
+    summary: Mapped[str | None] = mapped_column(String)
+    sentiment: Mapped[str | None] = mapped_column(String)
+    duration_seconds: Mapped[int | None] = mapped_column(Integer)
+    recording_url: Mapped[str | None] = mapped_column(String)
+    outcome: Mapped[str | None] = mapped_column(String)
+    cost: Mapped[float | None] = mapped_column(Numeric(10, 4))
+
+
+class CallIngestionLog(Base):
+    """Raw + extracted record of every Vapi webhook received. Logged
+    FIRST, before any parsing/writing, so a call never vanishes even if
+    downstream processing fails. See the Milestone 2 schema design."""
+
+    __tablename__ = "call_ingestion_logs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    received_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True))
+    vapi_call_id: Mapped[str | None] = mapped_column(String)
+    chain_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("chains.id"))
+    branch_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("branches.id"))
+    raw_payload: Mapped[dict] = mapped_column(JSONB)
+    processing_status: Mapped[str] = mapped_column(String, default="pending")
+    processing_message: Mapped[str | None] = mapped_column(String)
+    tables_written: Mapped[dict | None] = mapped_column(JSONB)
+    customer_name: Mapped[str | None] = mapped_column(String)
+    customer_phone: Mapped[str | None] = mapped_column(String)
+    requested_date: Mapped[date | None] = mapped_column(Date)
+    requested_time: Mapped[time | None] = mapped_column(Time)
+    appointment_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("appointments.id"))
+    extracted_data: Mapped[dict | None] = mapped_column(JSONB)
 
