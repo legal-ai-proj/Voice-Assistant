@@ -36,6 +36,13 @@ class SlotNoLongerAvailableError(Exception):
     pass
 
 
+class ServiceChangeNotAllowedError(Exception):
+    """The requested new service is invalid, or the appointment's barber
+    can't perform it -- the caller should cancel and rebook instead."""
+
+    pass
+
+
 class AlreadyCancelledError(Exception):
     pass
 
@@ -91,29 +98,53 @@ async def lookup_appointment(db: AsyncSession, branch_id: UUID, customer_phone: 
 
 
 async def reschedule_appointment(
-    db: AsyncSession, branch_id: UUID, appointment_id: UUID, target_date: date, start_time: time
+    db: AsyncSession,
+    branch_id: UUID,
+    appointment_id: UUID,
+    target_date: date,
+    start_time: time,
+    new_service_id: UUID | None = None,
 ) -> RescheduleAppointmentResponse:
     appointment = await mgmt_repo.get_appointment(db, appointment_id)
     if appointment is None or appointment.branch_id != branch_id or appointment.status != "booked":
         raise AppointmentNotFoundError(f"No active appointment {appointment_id} at branch {branch_id}")
 
-    service = await mgmt_repo.get_service_for_appointment(db, appointment_id)
-    if service is None:
+    current_service = await mgmt_repo.get_service_for_appointment(db, appointment_id)
+    if current_service is None:
         raise AppointmentNotFoundError(f"Could not resolve service for appointment {appointment_id}")
+
+    # If the caller is also changing the service, switch to the new one --
+    # and crucially use ITS duration for slot re-validation, since a
+    # 15-min beard trim becoming a 45-min fade needs a bigger window and
+    # would otherwise silently create a scheduling conflict.
+    service_changed = new_service_id is not None and new_service_id != current_service.id
+    if service_changed:
+        service = await avail_repo.get_service(db, new_service_id, branch_id)
+        if service is None:
+            raise ServiceChangeNotAllowedError(f"Service {new_service_id} not found or inactive at branch {branch_id}")
+    else:
+        service = current_service
+
+    staff_id = appointment.staff_id
+    if staff_id is None:
+        raise SlotNoLongerAvailableError("Appointment has no assigned staff to re-validate against")
+
+    # If the service changed, confirm the appointment's assigned barber
+    # can actually perform the new service -- don't silently keep a
+    # barber booked for something they don't do.
+    if service_changed:
+        eligible = await avail_repo.get_eligible_staff(db, branch_id, service.id, staff_id)
+        if not eligible:
+            raise ServiceChangeNotAllowedError(
+                "The barber on this appointment doesn't perform the new service; "
+                "the caller should cancel and rebook with an eligible barber."
+            )
 
     day_of_week = (target_date.weekday() + 1) % 7
     branch_and_chain = await info_repo.get_branch_with_chain(db, branch_id)
     tz_name = branch_and_chain[0].timezone if branch_and_chain else "UTC"
     new_start = combine_aware(target_date, start_time, tz_name)
     new_end = new_start + timedelta(minutes=service.duration_minutes)
-
-    # The appointment keeps its assigned staff member; re-validate that
-    # THAT staff member is free at the new time (excluding this same
-    # appointment's current slot, so moving it by 15 min doesn't collide
-    # with itself).
-    staff_id = appointment.staff_id
-    if staff_id is None:
-        raise SlotNoLongerAvailableError("Appointment has no assigned staff to re-validate against")
 
     window = await _get_working_window(db, branch_id, staff_id, day_of_week)
     if window is None:
@@ -130,11 +161,32 @@ async def reschedule_appointment(
     if _overlaps_any(new_start, new_end, busy, buffer_minutes=0):
         raise SlotNoLongerAvailableError("That new time was just taken")
 
+    # Update the appointment row (new end_time reflects the possibly-new duration)...
     await mgmt_repo.update_appointment_time(db, appointment, new_start, new_end)
+
+    # ...and if the service changed, update the customer_services record
+    # so the appointment and its recorded service/price stay in sync.
+    if service_changed:
+        await mgmt_repo.update_appointment_service(
+            db,
+            appointment_id=appointment_id,
+            new_service_id=service.id,
+            new_price=float(service.price_min),
+            performed_at=new_start,
+        )
+
     await db.commit()
 
     staff_row = await mgmt_repo.get_staff(db, staff_id)
     staff_name = staff_row.name if staff_row else "your barber"
+
+    if service_changed:
+        msg = (
+            f"Done — I've updated your appointment to a {service.name} with {staff_name} "
+            f"on {_fmt_date(target_date)} at {_fmt_time(start_time)}."
+        )
+    else:
+        msg = f"Done — I've moved your {service.name} with {staff_name} to {_fmt_date(target_date)} at {_fmt_time(start_time)}."
 
     return RescheduleAppointmentResponse(
         appointment_id=appointment.id,
@@ -143,7 +195,7 @@ async def reschedule_appointment(
         staff_name=staff_name,
         date=target_date,
         start_time=start_time,
-        message=f"Done — I've moved your {service.name} with {staff_name} to {_fmt_date(target_date)} at {_fmt_time(start_time)}.",
+        message=msg,
     )
 
 

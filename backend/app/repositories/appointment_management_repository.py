@@ -78,6 +78,29 @@ async def update_appointment_time(
     await db.flush()
 
 
+async def update_appointment_service(
+    db: AsyncSession,
+    appointment_id: UUID,
+    new_service_id: UUID,
+    new_price: float,
+    performed_at: datetime,
+) -> None:
+    """When a reschedule also changes the service, keep the
+    customer_services record in sync: point it at the new service and
+    snapshot the new price. Without this, the appointment's duration
+    would change but its recorded service/price would silently still be
+    the old one."""
+    result = await db.execute(
+        select(CustomerService).where(CustomerService.appointment_id == appointment_id)
+    )
+    cs = result.scalar_one_or_none()
+    if cs is not None:
+        cs.service_id = new_service_id
+        cs.price_at_booking = new_price
+        cs.performed_at = performed_at
+        await db.flush()
+
+
 async def set_appointment_status(db: AsyncSession, appointment: Appointment, status: str) -> None:
     appointment.status = status
     await db.flush()

@@ -206,13 +206,19 @@ async def reschedule_appointment_endpoint(
     """Move an existing appointment. Re-validates the new slot server-side."""
     try:
         return await mgmt.reschedule_appointment(
-            db, branch_id, payload.appointment_id, payload.date, payload.start_time
+            db, branch_id, payload.appointment_id, payload.date, payload.start_time, payload.service_id
         )
     except mgmt.AppointmentNotFoundError:
         logger.info("reschedule: appointment not found", extra={"branch_id": str(branch_id)})
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="I couldn't find that appointment to reschedule.",
+        )
+    except mgmt.ServiceChangeNotAllowedError:
+        logger.info("reschedule: service change not allowed", extra={"branch_id": str(branch_id)})
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="That service change isn't possible on this appointment — the caller should cancel and rebook.",
         )
     except mgmt.SlotNoLongerAvailableError:
         logger.info("reschedule: new slot unavailable", extra={"branch_id": str(branch_id)})

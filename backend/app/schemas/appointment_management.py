@@ -46,6 +46,13 @@ class RescheduleAppointmentRequest(BaseModel):
     appointment_id: UUID = Field(..., description="The appointment to move, from a prior lookup_appointment call.")
     date: date_type = Field(..., description="New date, YYYY-MM-DD, already resolved from any relative phrase.")
     start_time: time_type = Field(..., description="New start time, HH:MM, from a slot returned by check_availability.")
+    service_id: UUID | None = Field(
+        default=None,
+        description="Only include if the caller also wants a DIFFERENT service than "
+        "originally booked. Omit to keep the same service. Changing the service can "
+        "change the appointment length, so re-run check_availability for the new "
+        "service before confirming a time.",
+    )
 
 
 class RescheduleAppointmentResponse(BaseModel):
