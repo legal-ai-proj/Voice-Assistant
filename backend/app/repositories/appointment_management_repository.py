@@ -35,8 +35,9 @@ async def find_upcoming_appointments_by_phone(
 
     result = await db.execute(
         select(Appointment, Service, Staff)
-        .join(Service, Service.id == CustomerService.service_id)
+        .select_from(Appointment)
         .join(CustomerService, CustomerService.appointment_id == Appointment.id)
+        .join(Service, Service.id == CustomerService.service_id)
         .outerjoin(Staff, Staff.id == Appointment.staff_id)
         .where(
             Appointment.branch_id == branch_id,
