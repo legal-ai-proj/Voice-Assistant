@@ -14,7 +14,9 @@ from datetime import date as date_type
 from datetime import time as time_type
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.schemas.validators import empty_str_to_none
 
 
 class CheckAvailabilityRequest(BaseModel):
@@ -30,6 +32,8 @@ class CheckAvailabilityRequest(BaseModel):
         default=None,
         description="Omit for 'any barber' -- results are merged across all active staff who can perform this service.",
     )
+
+    _coerce_staff_id = field_validator("staff_id", mode="before")(empty_str_to_none)
 
 
 class AvailableSlot(BaseModel):

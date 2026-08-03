@@ -10,7 +10,9 @@ from datetime import date as date_type
 from datetime import time as time_type
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.schemas.validators import empty_str_to_none
 
 
 # ---- lookup_appointment ------------------------------------------------
@@ -53,6 +55,8 @@ class RescheduleAppointmentRequest(BaseModel):
         "change the appointment length, so re-run check_availability for the new "
         "service before confirming a time.",
     )
+
+    _coerce_service_id = field_validator("service_id", mode="before")(empty_str_to_none)
 
 
 class RescheduleAppointmentResponse(BaseModel):

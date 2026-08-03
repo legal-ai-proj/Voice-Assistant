@@ -11,7 +11,9 @@ from datetime import date as date_type
 from datetime import time as time_type
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.schemas.validators import empty_str_to_none
 
 
 class CreateAppointmentRequest(BaseModel):
@@ -21,6 +23,8 @@ class CreateAppointmentRequest(BaseModel):
     staff_id: UUID | None = Field(default=None, description="Omit for 'any barber' -- omitting lets the server pick any eligible, available staff member.")
     customer_name: str = Field(..., description="The caller's name, as given during the call.")
     customer_phone: str = Field(..., description="The caller's phone number, confirmed during the call.")
+
+    _coerce_staff_id = field_validator("staff_id", mode="before")(empty_str_to_none)
 
 
 class CreateAppointmentResponse(BaseModel):
