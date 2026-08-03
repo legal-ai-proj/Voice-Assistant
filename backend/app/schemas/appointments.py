@@ -30,6 +30,13 @@ class CreateAppointmentRequest(BaseModel):
 class CreateAppointmentResponse(BaseModel):
     appointment_id: UUID
     confirmed: bool
+    staff_id: UUID = Field(
+        ...,
+        description="The staff member actually assigned. If the caller is booking MORE than one "
+        "service in the same visit with no barber preference, pass this exact staff_id on every "
+        "subsequent create_appointment call for that visit -- don't let the server pick again, "
+        "since that can independently assign a different person to each service.",
+    )
     staff_name: str
     service_name: str
     date: date_type

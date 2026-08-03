@@ -138,6 +138,7 @@ async def create_appointment(
     return CreateAppointmentResponse(
         appointment_id=appointment.id,
         confirmed=True,
+        staff_id=chosen_staff.id,
         staff_name=chosen_staff.name,
         service_name=service.name,
         date=target_date,
