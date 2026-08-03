@@ -46,6 +46,7 @@ async def get_business_info(db: AsyncSession, branch_id: UUID) -> BusinessInfoRe
 
     services = [
         ServiceInfo(
+            id=s.id,
             name=s.name,
             duration_minutes=s.duration_minutes,
             price_min=float(s.price_min),
@@ -54,7 +55,7 @@ async def get_business_info(db: AsyncSession, branch_id: UUID) -> BusinessInfoRe
         for s in await repo.get_active_services(db, branch_id)
     ]
 
-    staff = [StaffInfo(name=s.name, role=s.role) for s in await repo.get_active_staff(db, branch_id)]
+    staff = [StaffInfo(id=s.id, name=s.name, role=s.role) for s in await repo.get_active_staff(db, branch_id)]
 
     products = [
         ProductInfo(

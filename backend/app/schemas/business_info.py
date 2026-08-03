@@ -5,7 +5,18 @@ baked into the static prompt -- instead, the agent calls this once at
 the start of a call and gets live data straight from Supabase. No
 request body needed; branch_id comes from the URL path, same as
 check_availability.
+
+IMPORTANT: services and staff both include `id` -- the actual UUID
+needed as `service_id`/`staff_id` when calling check_availability,
+create_appointment, or reschedule_appointment. Without this, the model
+has no legitimate way to reference a specific service/staff member in
+those calls except by guessing with the name, which fails UUID
+validation. This was a real bug found via a live call: the model
+passed the literal string "Men's Haircut" as service_id and got a
+uuid_parsing error, then couldn't recover from the failure.
 """
+
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -18,6 +29,7 @@ class DayHours(BaseModel):
 
 
 class ServiceInfo(BaseModel):
+    id: UUID = Field(..., description="Use this exact value as service_id in other tool calls -- never the name.")
     name: str
     duration_minutes: int
     price_min: float
@@ -28,6 +40,7 @@ class ServiceInfo(BaseModel):
 
 
 class StaffInfo(BaseModel):
+    id: UUID = Field(..., description="Use this exact value as staff_id in other tool calls -- never the name.")
     name: str
     role: str
 
@@ -55,3 +68,4 @@ class BusinessInfoResponse(BaseModel):
     staff: list[StaffInfo]
     products: list[ProductInfo]
     policies: PoliciesInfo
+
