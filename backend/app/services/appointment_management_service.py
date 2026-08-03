@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories import appointment_management_repository as mgmt_repo
+from app.repositories import appointment_repository as write_repo
 from app.repositories import availability_repository as avail_repo
 from app.repositories import business_info_repository as info_repo
 from app.schemas.appointment_management import (
@@ -34,6 +35,13 @@ class AppointmentNotFoundError(Exception):
 
 
 class SlotNoLongerAvailableError(Exception):
+    pass
+
+
+class CustomerDoubleBookedError(Exception):
+    """Raised when a reschedule would overlap another active appointment
+    THIS SAME CUSTOMER already has, even with a different staff member."""
+
     pass
 
 
@@ -172,6 +180,22 @@ async def reschedule_appointment(
     busy = [(a.start_time, a.end_time) for a in booked if a.id != appointment_id]
     if _overlaps_any(new_start, new_end, busy, buffer_minutes=0):
         raise SlotNoLongerAvailableError("That new time was just taken")
+
+    # This customer's OWN other appointments on this date, excluding the
+    # one being rescheduled -- catches the case where rescheduling would
+    # overlap something else the same customer already has booked, even
+    # with a different staff member. A real call hit this exactly:
+    # rescheduled two of one customer's appointments to the same
+    # overlapping time because each staff member individually had that
+    # slot open.
+    customer_appts = await write_repo.get_customer_appointments_on_date(
+        db, appointment.customer_id, target_date, tz_name, exclude_appointment_id=appointment_id
+    )
+    customer_windows = [(a.start_time, a.end_time) for a in customer_appts]
+    if _overlaps_any(new_start, new_end, customer_windows, buffer_minutes=0):
+        raise CustomerDoubleBookedError(
+            f"Customer {appointment.customer_id} already has an overlapping appointment on {target_date}"
+        )
 
     # Update the appointment row (new end_time reflects the possibly-new duration)...
     await mgmt_repo.update_appointment_time(db, appointment, new_start, new_end)

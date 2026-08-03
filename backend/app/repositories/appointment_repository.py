@@ -6,16 +6,48 @@ inserts.
 """
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tenant import Appointment, Customer, CustomerService
+from app.services.booking_service import combine_aware
 
 
-async def get_or_create_customer(db: AsyncSession, chain_id: UUID, phone: str, name: str) -> Customer:
+async def get_customer_appointments_on_date(
+    db: AsyncSession, customer_id: UUID, target_date: date, tz_name: str, exclude_appointment_id: UUID | None = None
+) -> list[Appointment]:
+    """All of this customer's other active (booked) appointments on a
+    given date -- used to prevent double-booking the SAME PERSON into
+    two overlapping slots, even with two different staff members. A
+    real call did exactly this: rescheduled two of one customer's
+    appointments (with different barbers) to the same overlapping time,
+    since staff-level availability checks alone don't catch it -- Abe
+    being free at 10:30 and Marco being free at 10:30 doesn't mean the
+    CALLER can be in both chairs at once.
+
+    Uses combine_aware (not datetime.combine) for the day-boundary
+    comparison, since Appointment.start_time is tz-aware (timestamptz)
+    -- comparing against a naive datetime would raise the same
+    offset-naive/aware TypeError fixed earlier in booking_service.py."""
+    from datetime import time as time_type
+
+    day_start = combine_aware(target_date, time_type.min, tz_name)
+    day_end = day_start + timedelta(days=1)
+
+    query = select(Appointment).where(
+        Appointment.customer_id == customer_id,
+        Appointment.status == "booked",
+        Appointment.start_time >= day_start,
+        Appointment.start_time < day_end,
+    )
+    if exclude_appointment_id is not None:
+        query = query.where(Appointment.id != exclude_appointment_id)
+
+    result = await db.execute(query)
+    return list(result.scalars().all())
     result = await db.execute(select(Customer).where(Customer.chain_id == chain_id, Customer.phone == phone))
     customer = result.scalar_one_or_none()
     if customer is not None:

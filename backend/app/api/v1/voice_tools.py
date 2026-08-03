@@ -39,6 +39,7 @@ from app.services.appointment_service import (
     ServiceNotFoundError as AppointmentServiceNotFoundError,
 )
 from app.services.appointment_service import (
+    CustomerDoubleBookedError,
     SlotNoLongerAvailableError,
     create_appointment,
 )
@@ -168,6 +169,15 @@ async def create_appointment_endpoint(
             status_code=status.HTTP_409_CONFLICT,
             detail="That time was just taken. Please check availability again for another slot.",
         )
+    except CustomerDoubleBookedError:
+        logger.info(
+            "create_appointment: customer already has an overlapping appointment",
+            extra={"branch_id": str(branch_id), "payload": payload.model_dump(mode="json")},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This customer already has another appointment that overlaps this time. Please choose a different time.",
+        )
     except Exception:
         logger.exception("create_appointment: unexpected failure")
         raise HTTPException(
@@ -225,6 +235,14 @@ async def reschedule_appointment_endpoint(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="That new time isn't available. Please check availability for another slot.",
+        )
+    except mgmt.CustomerDoubleBookedError:
+        logger.info(
+            "reschedule: customer already has an overlapping appointment", extra={"branch_id": str(branch_id)}
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="That new time overlaps another appointment this customer already has. Please choose a different time.",
         )
     except Exception:
         logger.exception("reschedule_appointment: unexpected failure")

@@ -37,6 +37,16 @@ class SlotNoLongerAvailableError(Exception):
     pass
 
 
+class CustomerDoubleBookedError(Exception):
+    """Raised when the requested time would overlap another active
+    appointment THIS SAME CUSTOMER already has, even with a different
+    staff member. Staff-level availability alone doesn't catch this --
+    two different barbers can both be free at 10:30, but the same
+    caller obviously can't be in two chairs at once."""
+
+    pass
+
+
 async def create_appointment(
     db: AsyncSession,
     branch_id: UUID,
@@ -90,6 +100,17 @@ async def create_appointment(
         )
 
     customer = await write_repo.get_or_create_customer(db, chain.id, customer_phone, customer_name)
+
+    # This customer's OWN other appointments on this date -- checked
+    # separately from staff-level availability, since two different
+    # staff being free at the same time doesn't mean this customer can
+    # be in two places at once.
+    existing = await write_repo.get_customer_appointments_on_date(db, customer.id, target_date, branch.timezone)
+    existing_windows = [(a.start_time, a.end_time) for a in existing]
+    if _overlaps_any(requested_start, requested_end, existing_windows, buffer_minutes=0):
+        raise CustomerDoubleBookedError(
+            f"Customer {customer.id} already has an overlapping appointment on {target_date}"
+        )
 
     appointment = await write_repo.insert_appointment(
         db,
