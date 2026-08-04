@@ -48,6 +48,9 @@ async def get_customer_appointments_on_date(
 
     result = await db.execute(query)
     return list(result.scalars().all())
+
+
+async def get_or_create_customer(db: AsyncSession, chain_id: UUID, phone: str, name: str) -> Customer:
     result = await db.execute(select(Customer).where(Customer.chain_id == chain_id, Customer.phone == phone))
     customer = result.scalar_one_or_none()
     if customer is not None:
