@@ -6,6 +6,8 @@ channels. Nothing outside this module should compute availability by
 hand.
 """
 
+import asyncio
+import time as time_module
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
@@ -15,6 +17,32 @@ from app.repositories import availability_repository as repo
 from app.schemas.availability import AvailableSlot, CheckAvailabilityResponse
 
 SLOT_INCREMENT_MINUTES = 15
+
+# ── Availability cache ──────────────────────────────────────────────────────
+# Keyed by (branch_id, service_id, date_iso). Pre-warmed at call start by
+# pre_warm_availability() so the first real check_availability tool call
+# returns instantly from cache instead of hitting the DB mid-conversation.
+
+_AVAIL_CACHE_TTL_SECONDS = 120  # 2 min -- slots change as other bookings land
+
+_avail_cache: dict[tuple, tuple[CheckAvailabilityResponse, float]] = {}
+
+
+def _avail_cache_key(branch_id: int, service_id: int, target_date: date, staff_id: int | None) -> tuple:
+    return (branch_id, service_id, target_date.isoformat(), staff_id)
+
+
+def _get_cached_availability(branch_id: int, service_id: int, target_date: date, staff_id: int | None) -> CheckAvailabilityResponse | None:
+    key = _avail_cache_key(branch_id, service_id, target_date, staff_id)
+    entry = _avail_cache.get(key)
+    if entry and time_module.monotonic() - entry[1] < _AVAIL_CACHE_TTL_SECONDS:
+        return entry[0]
+    return None
+
+
+def _set_cached_availability(branch_id: int, service_id: int, target_date: date, staff_id: int | None, response: CheckAvailabilityResponse) -> None:
+    key = _avail_cache_key(branch_id, service_id, target_date, staff_id)
+    _avail_cache[key] = (response, time_module.monotonic())
 
 
 def combine_aware(target_date: date, t: time, tz_name: str) -> datetime:
@@ -40,6 +68,67 @@ class NoEligibleStaffError(Exception):
 
 
 async def check_availability(
+    db: AsyncSession,
+    branch_id: int,
+    service_id: int,
+    target_date: date,
+    staff_id: int | None,
+    booking_buffer_minutes: int = 0,
+) -> CheckAvailabilityResponse:
+    # Cache hit — return instantly without touching the DB
+    cached = _get_cached_availability(branch_id, service_id, target_date, staff_id)
+    if cached is not None:
+        return cached
+
+    result = await _compute_availability(db, branch_id, service_id, target_date, staff_id, booking_buffer_minutes)
+    _set_cached_availability(branch_id, service_id, target_date, staff_id, result)
+    return result
+
+
+async def pre_warm_availability(db: AsyncSession, branch_id: int, days_ahead: int = 7) -> None:
+    """Pre-fetch availability for all active services × next N days and
+    store in the in-process cache. Called at inbound call start (alongside
+    get_business_info) so the first check_availability tool call during the
+    conversation returns instantly from cache instead of making the caller
+    wait for a DB round-trip mid-conversation.
+
+    Runs as a background task -- failures are swallowed so a warm-up error
+    never blocks the call itself."""
+    try:
+        from app.repositories.business_info_repository import get_active_services, get_branch_with_chain
+        branch_and_chain = await get_branch_with_chain(db, branch_id)
+        if branch_and_chain is None:
+            return
+        branch, _ = branch_and_chain
+
+        services = await get_active_services(db, branch_id)
+        today = datetime.now(ZoneInfo(branch.timezone)).date()
+        dates = [today + timedelta(days=i) for i in range(days_ahead + 1)]
+
+        # Fire all combinations concurrently -- this is the parallelism that
+        # eliminates waiting: instead of the caller triggering each lookup
+        # one at a time, we fetch all of them the instant the call connects.
+        tasks = [
+            _compute_and_cache(db, branch_id, s.id, d, None)
+            for s in services
+            for d in dates
+        ]
+        await asyncio.gather(*tasks, return_exceptions=True)
+    except Exception:
+        pass  # pre-warm failure must never break a call
+
+
+async def _compute_and_cache(db: AsyncSession, branch_id: int, service_id: int, target_date: date, staff_id: int | None) -> None:
+    if _get_cached_availability(branch_id, service_id, target_date, staff_id) is not None:
+        return  # already warm
+    try:
+        result = await _compute_availability(db, branch_id, service_id, target_date, staff_id)
+        _set_cached_availability(branch_id, service_id, target_date, staff_id, result)
+    except Exception:
+        pass
+
+
+async def _compute_availability(
     db: AsyncSession,
     branch_id: int,
     service_id: int,
