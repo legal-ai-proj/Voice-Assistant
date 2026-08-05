@@ -6,7 +6,7 @@ FastAPI entrypoint. Run locally with:
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import voice_tools
+from app.api.v1 import inbound, voice_tools
 from app.core.config import settings
 
 app = FastAPI(
@@ -28,6 +28,7 @@ app.add_middleware(
 )
 
 app.include_router(voice_tools.router)
+app.include_router(inbound.router)
 
 
 @app.get("/health", tags=["meta"])
