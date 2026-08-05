@@ -16,7 +16,6 @@ passed the literal string "Men's Haircut" as service_id and got a
 uuid_parsing error, then couldn't recover from the failure.
 """
 
-from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -29,7 +28,7 @@ class DayHours(BaseModel):
 
 
 class ServiceInfo(BaseModel):
-    id: UUID = Field(..., description="Use this exact value as service_id in other tool calls -- never the name.")
+    id: int = Field(..., description="Use this exact value as service_id in other tool calls -- never the name.")
     name: str
     price_min: float
     price_max: float | None = Field(
@@ -39,7 +38,7 @@ class ServiceInfo(BaseModel):
 
 
 class StaffInfo(BaseModel):
-    id: UUID = Field(..., description="Use this exact value as staff_id in other tool calls -- never the name.")
+    id: int = Field(..., description="Use this exact value as staff_id in other tool calls -- never the name.")
     name: str
     role: str
 

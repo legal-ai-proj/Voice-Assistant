@@ -7,9 +7,7 @@ two callers (or a phone caller and a web booking) go for the same slot
 at nearly the same time.
 """
 
-import uuid
 from datetime import date, datetime, time, timedelta
-from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,11 +48,11 @@ class CustomerDoubleBookedError(Exception):
 
 async def create_appointment(
     db: AsyncSession,
-    branch_id: UUID,
-    service_id: UUID,
+    branch_id: int,
+    service_id: int,
     target_date: date,
     start_time: time,
-    staff_id: UUID | None,
+    staff_id: int | None,
     customer_name: str,
     customer_phone: str,
 ) -> CreateAppointmentResponse:

@@ -8,9 +8,7 @@ ingestion log's processing_status with the outcome either way.
 """
 
 import logging
-import uuid
 from datetime import datetime, timezone
-from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,7 +17,7 @@ from app.models.tenant import CallIngestionLog, CallLog
 logger = logging.getLogger(__name__)
 
 
-async def process_end_of_call(db: AsyncSession, branch_id: UUID, payload: dict) -> dict:
+async def process_end_of_call(db: AsyncSession, branch_id: int, payload: dict) -> dict:
     """Returns a small dict summarising what happened, for the webhook
     response. Never raises to the caller -- a webhook that 500s just
     makes Vapi retry, and we'd rather record a 'failed' ingestion row
@@ -30,7 +28,6 @@ async def process_end_of_call(db: AsyncSession, branch_id: UUID, payload: dict) 
     vapi_call_id = message.get("call", {}).get("id") or payload.get("call", {}).get("id")
 
     ingestion = CallIngestionLog(
-        id=uuid.uuid4(),
         received_at=datetime.now(timezone.utc),
         vapi_call_id=vapi_call_id,
         branch_id=branch_id,
@@ -68,7 +65,6 @@ async def process_end_of_call(db: AsyncSession, branch_id: UUID, payload: dict) 
 
         # 3. Write the clean call_logs row.
         call_log = CallLog(
-            id=uuid.uuid4(),
             branch_id=branch_id,
             transcript=transcript,
             summary=summary,

@@ -12,7 +12,6 @@ name/hours are injected rather than reasoned about.
 
 from datetime import date as date_type
 from datetime import time as time_type
-from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -20,7 +19,7 @@ from app.schemas.validators import empty_str_to_none
 
 
 class CheckAvailabilityRequest(BaseModel):
-    service_id: UUID
+    service_id: int
     date: date_type = Field(
         ...,
         description="Resolved calendar date (YYYY-MM-DD). Vapi must "
@@ -28,7 +27,7 @@ class CheckAvailabilityRequest(BaseModel):
         "etc. -- using {{current_date}} before calling this tool. This "
         "endpoint does not do relative-date math itself.",
     )
-    staff_id: UUID | None = Field(
+    staff_id: int | None = Field(
         default=None,
         description="Omit for 'any barber' -- results are merged across all active staff who can perform this service.",
     )
@@ -37,7 +36,7 @@ class CheckAvailabilityRequest(BaseModel):
 
 
 class AvailableSlot(BaseModel):
-    staff_id: UUID
+    staff_id: int
     staff_name: str
     start_time: time_type
 

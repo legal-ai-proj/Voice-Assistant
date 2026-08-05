@@ -9,7 +9,6 @@ could have taken it in the meantime).
 
 from datetime import date as date_type
 from datetime import time as time_type
-from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -17,10 +16,10 @@ from app.schemas.validators import empty_str_to_none
 
 
 class CreateAppointmentRequest(BaseModel):
-    service_id: UUID
+    service_id: int
     date: date_type = Field(..., description="Exact calendar date, YYYY-MM-DD, already resolved from any relative phrase.")
     start_time: time_type = Field(..., description="Exact start time, HH:MM, from a slot returned by check_availability.")
-    staff_id: UUID | None = Field(default=None, description="Omit for 'any barber' -- omitting lets the server pick any eligible, available staff member.")
+    staff_id: int | None = Field(default=None, description="Omit for 'any barber' -- omitting lets the server pick any eligible, available staff member.")
     customer_name: str = Field(..., description="The caller's name, as given during the call.")
     customer_phone: str = Field(..., description="The caller's phone number, confirmed during the call.")
 
@@ -28,9 +27,9 @@ class CreateAppointmentRequest(BaseModel):
 
 
 class CreateAppointmentResponse(BaseModel):
-    appointment_id: UUID
+    appointment_id: int
     confirmed: bool
-    staff_id: UUID = Field(
+    staff_id: int = Field(
         ...,
         description="The staff member actually assigned. Reuse this exact value as staff_id "
         "for all subsequent services in the same visit.",

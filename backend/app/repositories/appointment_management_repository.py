@@ -4,9 +4,7 @@ business logic. Reschedule/cancel operate on existing appointment rows;
 lookup finds them by the caller's phone (the identity key).
 """
 
-import uuid
 from datetime import datetime
-from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,7 +20,7 @@ from app.models.tenant import (
 
 
 async def find_upcoming_appointments_by_phone(
-    db: AsyncSession, branch_id: UUID, chain_id: UUID, phone: str, now: datetime
+    db: AsyncSession, branch_id: int, chain_id: int, phone: str, now: datetime
 ) -> tuple[Customer | None, list[tuple[Appointment, Service, Staff | None]]]:
     """Returns the matched customer (if any) and their upcoming, still-booked
     appointments at this branch, each joined with its service and staff."""
@@ -51,17 +49,17 @@ async def find_upcoming_appointments_by_phone(
     return customer, rows
 
 
-async def get_appointment(db: AsyncSession, appointment_id: UUID) -> Appointment | None:
+async def get_appointment(db: AsyncSession, appointment_id: int) -> Appointment | None:
     result = await db.execute(select(Appointment).where(Appointment.id == appointment_id))
     return result.scalar_one_or_none()
 
 
-async def get_staff(db: AsyncSession, staff_id: UUID) -> Staff | None:
+async def get_staff(db: AsyncSession, staff_id: int) -> Staff | None:
     result = await db.execute(select(Staff).where(Staff.id == staff_id))
     return result.scalar_one_or_none()
 
 
-async def get_service_for_appointment(db: AsyncSession, appointment_id: UUID) -> Service | None:
+async def get_service_for_appointment(db: AsyncSession, appointment_id: int) -> Service | None:
     result = await db.execute(
         select(Service)
         .join(CustomerService, CustomerService.service_id == Service.id)
@@ -80,8 +78,8 @@ async def update_appointment_time(
 
 async def update_appointment_service(
     db: AsyncSession,
-    appointment_id: UUID,
-    new_service_id: UUID,
+    appointment_id: int,
+    new_service_id: int,
     new_price: float,
     performed_at: datetime,
 ) -> None:
@@ -107,10 +105,9 @@ async def set_appointment_status(db: AsyncSession, appointment: Appointment, sta
 
 
 async def insert_message(
-    db: AsyncSession, branch_id: UUID, caller_name: str | None, caller_phone: str | None, body: str
+    db: AsyncSession, branch_id: int, caller_name: str | None, caller_phone: str | None, body: str
 ) -> Message:
     msg = Message(
-        id=uuid.uuid4(),
         branch_id=branch_id,
         caller_name=caller_name,
         caller_phone=caller_phone,

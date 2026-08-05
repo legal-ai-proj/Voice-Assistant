@@ -22,7 +22,6 @@ wouldn't invalidate the others.
 """
 
 import time as time_module
-from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -41,14 +40,14 @@ _DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", 
 _CACHE_TTL_SECONDS = 300  # 5 minutes -- long enough to skip the DB on nearly every call,
                           # short enough that a price/hours change shows up within one workday's calls
 
-_cache: dict[UUID, tuple[BusinessInfoResponse, float]] = {}
+_cache: dict[int, tuple[BusinessInfoResponse, float]] = {}
 
 
 class BranchNotFoundError(Exception):
     pass
 
 
-async def get_business_info(db: AsyncSession, branch_id: UUID) -> BusinessInfoResponse:
+async def get_business_info(db: AsyncSession, branch_id: int) -> BusinessInfoResponse:
     cached = _cache.get(branch_id)
     if cached is not None:
         response, cached_at = cached
@@ -60,7 +59,7 @@ async def get_business_info(db: AsyncSession, branch_id: UUID) -> BusinessInfoRe
     return response
 
 
-async def _fetch_business_info(db: AsyncSession, branch_id: UUID) -> BusinessInfoResponse:
+async def _fetch_business_info(db: AsyncSession, branch_id: int) -> BusinessInfoResponse:
     branch_and_chain = await repo.get_branch_with_chain(db, branch_id)
     if branch_and_chain is None:
         raise BranchNotFoundError(f"Branch {branch_id} not found or inactive")

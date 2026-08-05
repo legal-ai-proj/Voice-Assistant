@@ -11,7 +11,6 @@ never sees, generates, or can get this value wrong.
 """
 
 import logging
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -62,7 +61,7 @@ router = APIRouter(
 
 @router.get("/business-info/{branch_id}", response_model=BusinessInfoResponse)
 async def business_info_endpoint(
-    branch_id: UUID,
+    branch_id: int,
     db: AsyncSession = Depends(get_db),
 ) -> BusinessInfoResponse:
     """Called once at the start of a call (per the prompt) to fetch
@@ -86,7 +85,7 @@ async def business_info_endpoint(
 
 @router.post("/check-availability/{branch_id}", response_model=CheckAvailabilityResponse)
 async def check_availability_endpoint(
-    branch_id: UUID,
+    branch_id: int,
     payload: CheckAvailabilityRequest,
     db: AsyncSession = Depends(get_db),
 ) -> CheckAvailabilityResponse:
@@ -130,7 +129,7 @@ async def check_availability_endpoint(
 
 @router.post("/create-appointment/{branch_id}", response_model=CreateAppointmentResponse)
 async def create_appointment_endpoint(
-    branch_id: UUID,
+    branch_id: int,
     payload: CreateAppointmentRequest,
     db: AsyncSession = Depends(get_db),
 ) -> CreateAppointmentResponse:
@@ -188,7 +187,7 @@ async def create_appointment_endpoint(
 
 @router.post("/lookup-appointment/{branch_id}", response_model=LookupAppointmentResponse)
 async def lookup_appointment_endpoint(
-    branch_id: UUID,
+    branch_id: int,
     payload: LookupAppointmentRequest,
     db: AsyncSession = Depends(get_db),
 ) -> LookupAppointmentResponse:
@@ -209,7 +208,7 @@ async def lookup_appointment_endpoint(
 
 @router.post("/reschedule-appointment/{branch_id}", response_model=RescheduleAppointmentResponse)
 async def reschedule_appointment_endpoint(
-    branch_id: UUID,
+    branch_id: int,
     payload: RescheduleAppointmentRequest,
     db: AsyncSession = Depends(get_db),
 ) -> RescheduleAppointmentResponse:
@@ -254,7 +253,7 @@ async def reschedule_appointment_endpoint(
 
 @router.post("/cancel-appointment/{branch_id}", response_model=CancelAppointmentResponse)
 async def cancel_appointment_endpoint(
-    branch_id: UUID,
+    branch_id: int,
     payload: CancelAppointmentRequest,
     db: AsyncSession = Depends(get_db),
 ) -> CancelAppointmentResponse:
@@ -282,7 +281,7 @@ async def cancel_appointment_endpoint(
 
 @router.post("/take-message/{branch_id}", response_model=TakeMessageResponse)
 async def take_message_endpoint(
-    branch_id: UUID,
+    branch_id: int,
     payload: TakeMessageRequest,
     db: AsyncSession = Depends(get_db),
 ) -> TakeMessageResponse:
@@ -304,7 +303,7 @@ async def take_message_endpoint(
 
 @router.post("/webhook/end-of-call/{branch_id}")
 async def end_of_call_webhook(
-    branch_id: UUID,
+    branch_id: int,
     request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> dict:

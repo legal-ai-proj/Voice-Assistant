@@ -6,7 +6,6 @@ none of them know *why* they're being called.
 """
 
 from datetime import date
-from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,12 +22,12 @@ from app.models.tenant import (
 )
 
 
-async def get_branch(db: AsyncSession, branch_id: UUID) -> Branch | None:
+async def get_branch(db: AsyncSession, branch_id: int) -> Branch | None:
     result = await db.execute(select(Branch).where(Branch.id == branch_id))
     return result.scalar_one_or_none()
 
 
-async def get_service(db: AsyncSession, service_id: UUID, branch_id: UUID) -> Service | None:
+async def get_service(db: AsyncSession, service_id: int, branch_id: int) -> Service | None:
     result = await db.execute(
         select(Service).where(
             Service.id == service_id,
@@ -39,7 +38,7 @@ async def get_service(db: AsyncSession, service_id: UUID, branch_id: UUID) -> Se
     return result.scalar_one_or_none()
 
 
-async def get_eligible_staff(db: AsyncSession, branch_id: UUID, service_id: UUID, staff_id: UUID | None) -> list[Staff]:
+async def get_eligible_staff(db: AsyncSession, branch_id: int, service_id: int, staff_id: int | None) -> list[Staff]:
     """Active staff at this branch who can perform this service. If
     staff_id is given, narrows to just that one (still validates they
     can actually perform the service -- never silently ignore that)."""
@@ -58,7 +57,7 @@ async def get_eligible_staff(db: AsyncSession, branch_id: UUID, service_id: UUID
     return list(result.scalars().all())
 
 
-async def get_branch_hours_for_day(db: AsyncSession, branch_id: UUID, day_of_week: int) -> BranchHours | None:
+async def get_branch_hours_for_day(db: AsyncSession, branch_id: int, day_of_week: int) -> BranchHours | None:
     result = await db.execute(
         select(BranchHours).where(
             BranchHours.branch_id == branch_id,
@@ -68,7 +67,7 @@ async def get_branch_hours_for_day(db: AsyncSession, branch_id: UUID, day_of_wee
     return result.scalar_one_or_none()
 
 
-async def get_staff_hours_for_day(db: AsyncSession, staff_id: UUID, day_of_week: int) -> StaffHours | None:
+async def get_staff_hours_for_day(db: AsyncSession, staff_id: int, day_of_week: int) -> StaffHours | None:
     """Returns None if the staff member has no override -- caller
     should fall back to branch hours in that case."""
     result = await db.execute(
@@ -80,7 +79,7 @@ async def get_staff_hours_for_day(db: AsyncSession, staff_id: UUID, day_of_week:
     return result.scalar_one_or_none()
 
 
-async def get_staff_time_off(db: AsyncSession, staff_id: UUID, target_date: date) -> StaffTimeOff | None:
+async def get_staff_time_off(db: AsyncSession, staff_id: int, target_date: date) -> StaffTimeOff | None:
     result = await db.execute(
         select(StaffTimeOff).where(
             StaffTimeOff.staff_id == staff_id,
@@ -91,7 +90,7 @@ async def get_staff_time_off(db: AsyncSession, staff_id: UUID, target_date: date
     return result.scalar_one_or_none()
 
 
-async def get_booked_appointments(db: AsyncSession, staff_id: UUID, target_date: date) -> list[Appointment]:
+async def get_booked_appointments(db: AsyncSession, staff_id: int, target_date: date) -> list[Appointment]:
     """Existing, non-cancelled appointments for one staff member on one
     date -- these are the windows a new slot must not overlap."""
     result = await db.execute(

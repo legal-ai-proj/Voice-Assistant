@@ -5,9 +5,7 @@ the platform's design), and the actual appointment/customer_service
 inserts.
 """
 
-import uuid
 from datetime import date, datetime, timedelta
-from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +15,7 @@ from app.services.booking_service import combine_aware
 
 
 async def get_customer_appointments_on_date(
-    db: AsyncSession, customer_id: UUID, target_date: date, tz_name: str, exclude_appointment_id: UUID | None = None
+    db: AsyncSession, customer_id: int, target_date: date, tz_name: str, exclude_appointment_id: int | None = None
 ) -> list[Appointment]:
     """All of this customer's other active (booked) appointments on a
     given date -- used to prevent double-booking the SAME PERSON into
@@ -50,7 +48,7 @@ async def get_customer_appointments_on_date(
     return list(result.scalars().all())
 
 
-async def get_or_create_customer(db: AsyncSession, chain_id: UUID, phone: str, name: str) -> Customer:
+async def get_or_create_customer(db: AsyncSession, chain_id: int, phone: str, name: str) -> Customer:
     result = await db.execute(select(Customer).where(Customer.chain_id == chain_id, Customer.phone == phone))
     customer = result.scalar_one_or_none()
     if customer is not None:
@@ -60,7 +58,7 @@ async def get_or_create_customer(db: AsyncSession, chain_id: UUID, phone: str, n
             customer.name = name
         return customer
 
-    customer = Customer(id=uuid.uuid4(), chain_id=chain_id, phone=phone, name=name)
+    customer = Customer(chain_id=chain_id, phone=phone, name=name)
     db.add(customer)
     await db.flush()  # populate customer.id without committing yet
     return customer
@@ -68,14 +66,13 @@ async def get_or_create_customer(db: AsyncSession, chain_id: UUID, phone: str, n
 
 async def insert_appointment(
     db: AsyncSession,
-    branch_id: UUID,
-    staff_id: UUID,
-    customer_id: UUID,
+    branch_id: int,
+    staff_id: int,
+    customer_id: int,
     start_time: datetime,
     end_time: datetime,
 ) -> Appointment:
     appointment = Appointment(
-        id=uuid.uuid4(),
         branch_id=branch_id,
         staff_id=staff_id,
         customer_id=customer_id,
@@ -91,17 +88,16 @@ async def insert_appointment(
 
 async def insert_customer_service(
     db: AsyncSession,
-    customer_id: UUID,
-    chain_id: UUID,
-    branch_id: UUID,
-    appointment_id: UUID,
-    service_id: UUID,
-    staff_id: UUID,
+    customer_id: int,
+    chain_id: int,
+    branch_id: int,
+    appointment_id: int,
+    service_id: int,
+    staff_id: int,
     price_at_booking: float,
     performed_at: datetime,
 ) -> CustomerService:
     row = CustomerService(
-        id=uuid.uuid4(),
         customer_id=customer_id,
         chain_id=chain_id,
         branch_id=branch_id,

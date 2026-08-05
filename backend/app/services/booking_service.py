@@ -7,7 +7,6 @@ hand.
 """
 
 from datetime import date, datetime, time, timedelta
-from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -42,10 +41,10 @@ class NoEligibleStaffError(Exception):
 
 async def check_availability(
     db: AsyncSession,
-    branch_id: UUID,
-    service_id: UUID,
+    branch_id: int,
+    service_id: int,
     target_date: date,
-    staff_id: UUID | None,
+    staff_id: int | None,
     booking_buffer_minutes: int = 0,
 ) -> CheckAvailabilityResponse:
     service = await repo.get_service(db, service_id, branch_id)
@@ -98,7 +97,7 @@ async def check_availability(
 
 
 async def _get_working_window(
-    db: AsyncSession, branch_id: UUID, staff_id: UUID, day_of_week: int
+    db: AsyncSession, branch_id: int, staff_id: int, day_of_week: int
 ) -> tuple[time, time] | None:
     """Staff-level hours override branch hours if present for that day.
     Returns None if closed (either explicitly, or no hours configured

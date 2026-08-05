@@ -2,20 +2,20 @@
   "type": "function",
   "function": {
     "name": "check_availability",
-    "description": "Check open appointment slots for a service on a specific date, optionally for a specific barber. Always resolve any relative date the caller gives (e.g. 'next Monday') to an exact YYYY-MM-DD date using {{current_date}} before calling this.",
+    "description": "Check open appointment slots for a service on a specific date, optionally for a specific barber.",
     "parameters": {
       "type": "object",
       "properties": {
         "service_id": {
-          "type": "string",
-          "description": "The service the caller wants."
+          "type": "integer",
+          "description": "The service ID (integer) from get_business_info."
         },
         "date": {
           "type": "string",
-          "description": "Exact calendar date, YYYY-MM-DD. Must already be resolved from any relative phrase."
+          "description": "Exact calendar date, YYYY-MM-DD."
         },
         "staff_id": {
-          "type": "string",
+          "type": "integer",
           "description": "Optional. Omit entirely if the caller has no barber preference."
         }
       },
@@ -23,10 +23,9 @@
     }
   },
   "server": {
-    "url": "https://<your-railway-app>.up.railway.app/api/v1/voice-tools/check-availability/<this-branch's-branch_id>",
+    "url": "https://booking-service-production-5815.up.railway.app/api/v1/voice-tools/check-availability/1",
     "headers": {
-      "x-vapi-secret": "<VAPI_SHARED_SECRET -- same value as the backend's env var, set per-assistant in Vapi dashboard, never commit this>"
+      "x-vapi-secret": "<set via Vapi credential, never commit>"
     }
   }
 }
-

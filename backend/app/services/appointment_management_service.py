@@ -7,7 +7,6 @@ the record survives for reporting and no-show tracking.
 """
 
 from datetime import date, datetime, time, timedelta, timezone
-from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -64,7 +63,7 @@ def _fmt_time(t: time) -> str:
     return t.strftime("%-I:%M %p")
 
 
-async def lookup_appointment(db: AsyncSession, branch_id: UUID, customer_phone: str) -> LookupAppointmentResponse:
+async def lookup_appointment(db: AsyncSession, branch_id: int, customer_phone: str) -> LookupAppointmentResponse:
     branch_and_chain = await info_repo.get_branch_with_chain(db, branch_id)
     if branch_and_chain is None:
         raise BranchNotFoundError(f"Branch {branch_id} not found or inactive")
@@ -119,11 +118,11 @@ async def lookup_appointment(db: AsyncSession, branch_id: UUID, customer_phone: 
 
 async def reschedule_appointment(
     db: AsyncSession,
-    branch_id: UUID,
-    appointment_id: UUID,
+    branch_id: int,
+    appointment_id: int,
     target_date: date,
     start_time: time,
-    new_service_id: UUID | None = None,
+    new_service_id: int | None = None,
 ) -> RescheduleAppointmentResponse:
     appointment = await mgmt_repo.get_appointment(db, appointment_id)
     if appointment is None or appointment.branch_id != branch_id or appointment.status != "booked":
@@ -235,7 +234,7 @@ async def reschedule_appointment(
     )
 
 
-async def cancel_appointment(db: AsyncSession, branch_id: UUID, appointment_id: UUID) -> CancelAppointmentResponse:
+async def cancel_appointment(db: AsyncSession, branch_id: int, appointment_id: int) -> CancelAppointmentResponse:
     appointment = await mgmt_repo.get_appointment(db, appointment_id)
     if appointment is None or appointment.branch_id != branch_id:
         raise AppointmentNotFoundError(f"No appointment {appointment_id} at branch {branch_id}")
@@ -253,7 +252,7 @@ async def cancel_appointment(db: AsyncSession, branch_id: UUID, appointment_id: 
 
 
 async def take_message(
-    db: AsyncSession, branch_id: UUID, caller_name: str | None, caller_phone: str | None, message_body: str
+    db: AsyncSession, branch_id: int, caller_name: str | None, caller_phone: str | None, message_body: str
 ) -> TakeMessageResponse:
     branch_and_chain = await info_repo.get_branch_with_chain(db, branch_id)
     if branch_and_chain is None:

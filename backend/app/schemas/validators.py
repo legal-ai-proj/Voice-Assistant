@@ -16,11 +16,10 @@ expensive (the caller notices, unlike a silently-corrected value).
 """
 
 from typing import Any
-from uuid import UUID
 
 
 def empty_str_to_none(value: Any) -> Any:
-    """Use as a `mode="before"` validator on any `UUID | None` field."""
+    """Use as a `mode="before"` validator on any `int | None` field."""
     if isinstance(value, str) and value.strip() == "":
         return None
     return value
