@@ -10,6 +10,7 @@ at nearly the same time.
 import uuid
 from datetime import date, datetime, time, timedelta
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -143,6 +144,7 @@ async def create_appointment(
         service_name=service.name,
         date=target_date,
         start_time=start_time,
+        end_time=requested_end.astimezone(ZoneInfo(branch.timezone)).time(),
         message=(
             f"You're all set: a {service.name} with {chosen_staff.name} on "
             f"{target_date.strftime('%A, %B %-d')} at {start_time.strftime('%-I:%M %p')}."

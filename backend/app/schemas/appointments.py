@@ -32,18 +32,19 @@ class CreateAppointmentResponse(BaseModel):
     confirmed: bool
     staff_id: UUID = Field(
         ...,
-        description="The staff member actually assigned. If the caller is booking MORE than one "
-        "service in the same visit with no barber preference, pass this exact staff_id on every "
-        "subsequent create_appointment call for that visit -- don't let the server pick again, "
-        "since that can independently assign a different person to each service.",
+        description="The staff member actually assigned. Reuse this exact value as staff_id "
+        "for all subsequent services in the same visit.",
     )
     staff_name: str
     service_name: str
     date: date_type
     start_time: time_type
+    end_time: time_type = Field(
+        ...,
+        description="When this appointment ends. Use this as the start_time for the NEXT "
+        "service in the same visit -- do not use the same start_time as this appointment.",
+    )
     message: str = Field(
         ...,
-        description="Short, speakable confirmation for the voice agent to read back -- "
-        "e.g. 'You're all set: a Men's Haircut with Marco on Wednesday, August 5th at 10:00 AM.' "
-        "Only ever generated when confirmed is true.",
+        description="Short, speakable confirmation for the voice agent to read back.",
     )
