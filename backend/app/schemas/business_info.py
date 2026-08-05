@@ -31,7 +31,6 @@ class DayHours(BaseModel):
 class ServiceInfo(BaseModel):
     id: UUID = Field(..., description="Use this exact value as service_id in other tool calls -- never the name.")
     name: str
-    duration_minutes: int
     price_min: float
     price_max: float | None = Field(
         default=None,
@@ -61,7 +60,10 @@ class PoliciesInfo(BaseModel):
 class BusinessInfoResponse(BaseModel):
     business_name: str
     business_type: str
-    address: str | None
+    address: str | None = Field(
+        default=None,
+        description="Speak this naturally as written — do not split into individual digits or letters. e.g. '307 North Main Avenue, San Antonio, TX 78205' should be spoken as 'three oh seven North Main Avenue'.",
+    )
     phone: str | None
     hours: list[DayHours]
     services: list[ServiceInfo]

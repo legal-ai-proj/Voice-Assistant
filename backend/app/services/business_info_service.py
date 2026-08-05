@@ -81,7 +81,6 @@ async def _fetch_business_info(db: AsyncSession, branch_id: UUID) -> BusinessInf
         ServiceInfo(
             id=s.id,
             name=s.name,
-            duration_minutes=s.duration_minutes,
             price_min=float(s.price_min),
             price_max=float(s.price_max) if s.price_max is not None else None,
         )
