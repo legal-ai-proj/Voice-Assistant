@@ -47,7 +47,7 @@ async def _warm_caches(branch_id: int, tz_name: str) -> None:
         async with AsyncSessionLocal() as db:
             await asyncio.gather(
                 get_business_info(db, branch_id),
-                pre_warm_availability(db, branch_id, days_ahead=7),
+                pre_warm_availability(db, branch_id, days_ahead=14),
                 return_exceptions=True,
             )
     except Exception:
@@ -96,6 +96,12 @@ async def inbound_call(request: Request) -> dict:
 
     # Fire pre-warming in background -- response returns immediately
     asyncio.create_task(_warm_caches(branch_id, str(tz)))
+
+    # Note: pre_warm_availability uses days_ahead=14 (two weeks) since
+    # callers typically book up to 2 weeks out. 7 days was too short --
+    # a call for "Saturday August 15" on August 6 was a cache miss
+    # (9 days out) and hit the DB live, making it vulnerable to
+    # ECONNRESET. 14 days covers the full typical booking horizon.
 
     return {
         "assistantOverrides": {

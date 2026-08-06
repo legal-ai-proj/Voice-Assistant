@@ -7,6 +7,7 @@ hand.
 """
 
 import asyncio
+import logging
 import time as time_module
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
@@ -16,6 +17,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories import availability_repository as repo
 from app.schemas.availability import AvailableSlot, CheckAvailabilityResponse
 
+logger = logging.getLogger(__name__)
+
 SLOT_INCREMENT_MINUTES = 15
 
 # ── Availability cache ──────────────────────────────────────────────────────
@@ -23,7 +26,11 @@ SLOT_INCREMENT_MINUTES = 15
 # pre_warm_availability() so the first real check_availability tool call
 # returns instantly from cache instead of hitting the DB mid-conversation.
 
-_AVAIL_CACHE_TTL_SECONDS = 120  # 2 min -- slots change as other bookings land
+_AVAIL_CACHE_TTL_SECONDS = 600  # 10 min -- covers a full call even if it runs long.
+                                # Pre-warming populates this at call start; the TTL
+                                # just needs to outlast the call itself. A new booking
+                                # during the call automatically invalidates the relevant
+                                # slot via the server-side re-validation on create.
 
 _avail_cache: dict[tuple, tuple[CheckAvailabilityResponse, float]] = {}
 
@@ -36,7 +43,9 @@ def _get_cached_availability(branch_id: int, service_id: int, target_date: date,
     key = _avail_cache_key(branch_id, service_id, target_date, staff_id)
     entry = _avail_cache.get(key)
     if entry and time_module.monotonic() - entry[1] < _AVAIL_CACHE_TTL_SECONDS:
+        logger.debug("check_availability: CACHE HIT branch=%s service=%s date=%s", branch_id, service_id, target_date)
         return entry[0]
+    logger.debug("check_availability: CACHE MISS branch=%s service=%s date=%s -- hitting DB", branch_id, service_id, target_date)
     return None
 
 
