@@ -32,6 +32,7 @@ class Branch(Base):
     phone: Mapped[str | None] = mapped_column(String)
     timezone: Mapped[str] = mapped_column(String)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    vapi_phone_number: Mapped[str | None] = mapped_column(String)
 
     hours: Mapped[list["BranchHours"]] = relationship(back_populates="branch")
     staff: Mapped[list["Staff"]] = relationship(back_populates="branch")
