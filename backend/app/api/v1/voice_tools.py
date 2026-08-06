@@ -27,7 +27,18 @@ from app.schemas.appointment_management import (
     TakeMessageRequest,
     TakeMessageResponse,
 )
-from app.schemas.appointments import CreateAppointmentRequest, CreateAppointmentResponse
+from app.schemas.appointments import (
+    CreateAppointmentRequest,
+    CreateAppointmentResponse,
+    CreateAppointmentsRequest,
+    CreateAppointmentsResponse,
+)
+from app.services.appointments_multi_service import (
+    BranchNotFoundError as MultiBranchNotFoundError,
+    ServiceNotFoundError as MultiServiceNotFoundError,
+    SlotNotAvailableError as MultiSlotNotAvailableError,
+    create_appointments,
+)
 from app.schemas.availability import CheckAvailabilityRequest, CheckAvailabilityResponse
 from app.schemas.business_info import BusinessInfoResponse
 from app.services import appointment_management_service as mgmt
@@ -298,6 +309,37 @@ async def take_message_endpoint(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Something went wrong saving that message. Please try again shortly.",
+        )
+
+
+@router.post("/create-appointments/{branch_id}", response_model=CreateAppointmentsResponse)
+async def create_appointments_endpoint(
+    branch_id: int,
+    payload: CreateAppointmentsRequest,
+    db: AsyncSession = Depends(get_db),
+) -> CreateAppointmentsResponse:
+    """Book multiple services in one call. Same barber for all services,
+    sequential times, single atomic transaction. Use this instead of
+    calling create-appointment multiple times when the caller wants more
+    than one service in the same visit."""
+    try:
+        return await create_appointments(db, branch_id, payload)
+    except MultiBranchNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Branch not found.")
+    except MultiServiceNotFoundError as e:
+        logger.warning("create_appointments: service not found: %s", e)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except MultiSlotNotAvailableError as e:
+        logger.info("create_appointments: slot unavailable: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e),
+        )
+    except Exception:
+        logger.exception("create_appointments: unexpected failure")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Something went wrong booking those appointments. Please try again.",
         )
 
 
